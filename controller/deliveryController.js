@@ -1,7 +1,7 @@
 // const Delivery = require('../model/delivery');
 const { where } = require('sequelize');
 const { DriversDetails, Delivery, Orders, Procurement } = require('../model/index');
-
+const Notification = require('../model/notification.js');
 // Helper to generate unique delivery number
 async function generateUniqueDeliveryNumber(driver_id) {
   let count = await Delivery.count({ where: { driver_id } });
@@ -110,6 +110,27 @@ exports.updateDelivery = async (req, res) => {
 
     // Perform the update
     await delivery.update(updateFields);
+
+    // Send notification to admin if delivered
+    if (updateFields.status === 'Delivered') {
+      // Find the related order (assuming delivery has order_id)
+      let order = null;
+      if (delivery.order_id) {
+        order = await Orders.findByPk(delivery.order_id);
+      }
+      let driverName = '';
+      if (delivery.driver_id) {
+        const driver = await DriversDetails.findByPk(delivery.driver_id);
+        if (driver) {
+          driverName = `${driver.first_name} ${driver.last_name}`;
+        }
+      }
+      await Notification.create({
+        order_id: order ? order.oid : delivery.order_id,
+        admin_id: 1,
+        message: `Order #${order ? order.oid : delivery.order_id} has been marked as Completed by driver ${driverName}. Status: Completed.`
+      });
+    }
 
     res.status(200).json({ message: 'Delivery updated', delivery: formatDelivery(delivery) });
   } catch (error) {
@@ -276,10 +297,29 @@ exports.markAsDeliveredWithImage = async (req, res) => {
       );
     }
 
+    const driver = await DriversDetails.findByPk(delivery.driver_id);
+    const driverName = `${driver.first_name} ${driver.last_name}`;
+
     await delivery.update({
       status: 'Delivered',
       delivery_image
     });
+    
+    if(delivery.order_id){
+      await Notification.create({
+        order_id: delivery.order_id,
+        admin_id: 1,
+        message: `Order #${delivery.order_id} has been marked as Completed by driver ${driverName}. Status: Completed.`
+      });
+    }
+    else if(delivery.procurement_id){
+      await Notification.create({
+        order_id: null,
+        admin_id: 1,
+        message: `Procurement #${delivery.procurement_id} has been marked as Completed by driver ${driverName}. Status: Completed.`
+      });
+    }
+
 
     return res.status(200).json({ message: 'Delivery marked as Delivered', delivery: formatDelivery(delivery) });
   } catch (error) {

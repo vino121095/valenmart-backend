@@ -103,7 +103,22 @@ const createProcurement = async (req, res) => {
       await Notification.create({
         procurement_id: newProcurement.procurement_id,
         vendor_id,
-        message: `New procurement request #${newProcurement.procurement_id} created with status: ${procurementStatus}`
+        message: `New procurement request #${newProcurement.procurement_id} created with status: ${procurementStatus} by admin`
+      });
+      // Create notification for admin with vendor name
+      // Fetch vendor name (contact_person)
+      const vendor = await Vendor.findByPk(vendor_id);
+      const vendorName = vendor ? vendor.contact_person : 'Unknown Vendor';
+      let adminMessage;
+      if (type === 'admin') {
+        adminMessage = `New procurement request #${newProcurement.procurement_id} created by admin for vendor: ${vendorName}`;
+      } else {
+        adminMessage = `New procurement request #${newProcurement.procurement_id} submitted by vendor: ${vendorName}`;
+      }
+      await Notification.create({
+        procurement_id: newProcurement.procurement_id,
+        admin_id: 1,
+        message: adminMessage
       });
     }
 
@@ -186,7 +201,8 @@ const updateProcurement = async (req, res) => {
       status,
       cgst,
       sgst,
-      delivery_fee
+      delivery_fee,
+      negotiationtype
     } = req.body;
 
     // Fetch existing record
@@ -218,6 +234,8 @@ const updateProcurement = async (req, res) => {
     let finalVendorName = procurement.vendor_name;
     let originalStatus = procurement.status;
     let originalDriverId = procurement.driver_id;
+   
+
     if (type === 'admin') {
       if (!vendor_name) {
         return res.status(400).json({ message: 'vendor_name is required when type is admin' });
@@ -236,7 +254,90 @@ const updateProcurement = async (req, res) => {
       finalVendorName = null;
     }
 
-    // Update values
+    // Store old values before update
+    const oldPrice = procurement.price;
+    let oldItems = procurement.items;
+    try {
+      oldItems = typeof oldItems === 'string' ? JSON.parse(oldItems) : oldItems;
+    } catch (e) {
+      oldItems = [];
+    }
+
+    let newItems = items;
+    try {
+      newItems = typeof newItems === 'string' ? JSON.parse(newItems) : newItems;
+    } catch (e) {
+      newItems = [];
+    }
+
+    // Detect price or per-product price change
+    let priceChanged = false;
+    if (typeof price !== 'undefined' && parseFloat(price) !== parseFloat(oldPrice)) {
+      priceChanged = true;
+    }
+
+    let itemsChanged = false;
+    if (items) {
+      if (Array.isArray(oldItems) && Array.isArray(newItems) && oldItems.length === newItems.length) {
+        for (let i = 0; i < oldItems.length; i++) {
+          if (parseFloat(oldItems[i].unit_price) !== parseFloat(newItems[i].unit_price)) {
+            itemsChanged = true;
+            break;
+          }
+        }
+      } else if (Array.isArray(oldItems) && Array.isArray(newItems)) {
+        itemsChanged = true;
+      }
+    }
+
+    // Send negotiation notification BEFORE update
+    if (priceChanged || itemsChanged) {
+      let message;
+      if (negotiationtype === 'vendor') {
+        message = `Vendor has updated the price for procurement #${procurement.procurement_id}. Please review and negotiate if needed.`;
+        await Notification.create({
+          procurement_id: procurement.procurement_id,
+          admin_id: 1, // Assuming main admin
+          message
+        });
+      }
+      else if ((negotiationtype === 'admin') && vendor_id) {
+        message = `Admin has updated the price for procurement #${procurement.procurement_id}. Please review and negotiate if needed.`;
+        await Notification.create({
+          procurement_id: procurement.procurement_id,
+          vendor_id: vendor_id,
+          message
+        });
+      } 
+    }
+
+    if (status === 'Approved') {
+      // Get the driver_id from the request or procurement record
+      const driverIdToUse = driver_id || procurement.driver_id;
+      let driverName = 'Unknown Driver';
+      if (driverIdToUse) {
+        const driver = await DriversDetails.findByPk(driverIdToUse);
+        if (driver) {
+          driverName = `${driver.first_name || ''} ${driver.last_name || ''}`.trim();
+        }
+      }
+      let message = `Driver (${driverName}) has accepted your Procurement #${procurement.procurement_id}.`;
+      await Notification.create({
+        procurement_id: procurement.procurement_id,
+        admin_id: 1,
+        message
+      });
+    }
+    else if(status === 'Picked'){
+      let message = `Driver has accepted your Procurement #${procurement.procurement_id}.`
+      await Notification.create({
+        procurement_id: procurement.procurement_id,
+        admin_id:1,
+        message
+      })
+    }
+
+    // Now update the procurement
     await procurement.update({
       order_date: order_date || procurement.order_date,
       actual_delivery_date: actual_delivery_date || procurement.actual_delivery_date,
@@ -266,13 +367,13 @@ const updateProcurement = async (req, res) => {
         message: `Procurement #${procurement.procurement_id} status updated from ${originalStatus} to ${procurement.status}`
       });
 
-      if (procurement.driver_id) {
-        await Notification.create({
-          procurement_id: procurement.procurement_id,
-          driver_id: procurement.driver_id,
-          message: `Procurement #${procurement.procurement_id} status updated to ${procurement.status}`
-        });
-      }
+      // if (procurement.driver_id) {
+      //   await Notification.create({
+      //     procurement_id: procurement.procurement_id,
+      //     driver_id: procurement.driver_id,
+      //     message: `Procurement #${procurement.procurement_id} status updated to ${procurement.status}`
+      //   });
+      // }
     }
 
     // Driver assignment notification

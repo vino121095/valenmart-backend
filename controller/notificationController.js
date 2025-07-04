@@ -147,6 +147,45 @@ const getDriverNotification = async (req, res) => {
       }
   }
 
+const getNotificationAdmin = async (req, res) => {
+    try {
+      const { id } = req.params;
+  
+      if (!id) {
+        return res.status(400).json({ error: 'admin_id is required' });
+      }
+  
+      const notifications = await Notification.findAll({
+        where: { admin_id: id },
+        order: [['createdAt', 'DESC']]
+      });
+  
+      return res.status(200).json({ notifications });
+    } catch (error) {
+      console.error('Error fetching admin notifications:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  };
+
+const markAsReadAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+    
+        if (!id) {
+          return res.status(400).json({ error: 'admin_id is required' });
+        }
+    
+        await Notification.update(
+          { is_read: true },
+          { where: { admin_id: id } }
+        );
+    
+        return res.status(200).json({message:'All admin notifications marked as read successfully'});
+      } catch (error) {
+        console.error('Error updating admin notifications:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+  }
 
   module.exports = {
     getNotification,
@@ -154,5 +193,7 @@ const getDriverNotification = async (req, res) => {
     getVendorNotification,
     vendorMarkAsRead,
     getDriverNotification,
-    driverMarkAsRead
+    driverMarkAsRead,
+    getNotificationAdmin,
+    markAsReadAdmin
   };

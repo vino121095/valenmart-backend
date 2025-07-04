@@ -8,6 +8,7 @@ const CustomerProfile = require('./customerProfile');
 const Procurement = require('./procurement');
 const Vendor = require('./vendor');
 const DriversDetails = require('./driversDetails');
+const Admin = require('./admin');
 
 // Define the Notification model
 const Notification = db.define('Notification', {
@@ -67,7 +68,15 @@ const Notification = db.define('Notification', {
     },
     onDelete: 'CASCADE'
   },
-
+  admin_id: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: Admin,
+      key: 'aid'
+    },
+    onDelete: 'CASCADE'
+  },
   // Message content
   message: {
     type: DataTypes.STRING,
@@ -99,5 +108,8 @@ Vendor.hasMany(Notification, { foreignKey: 'vendor_id' });
 
 Notification.belongsTo(DriversDetails, { foreignKey: 'driver_id' });
 DriversDetails.hasMany(Notification, { foreignKey: 'driver_id' });
+
+Notification.belongsTo(Admin, { foreignKey: 'admin_id' });
+Admin.hasMany(Notification, { foreignKey: 'admin_id' });
 
 module.exports = Notification;

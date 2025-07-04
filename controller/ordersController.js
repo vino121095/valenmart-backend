@@ -1,9 +1,10 @@
+const { Op } = require('sequelize');
 // const Orders = require('../model/orders');
 const { Orders, CustomerProfile, DriversDetails, OrderItems, Products } = require('../model/index.js');
 const Notification = require('../model/notification.js');
 const sequelize = require('../Config/db.js');
 const Delivery = require('../model/delivery.js');
-
+// const Admin = require('../model/admin.js');
 // Create Order
 const createOrder = async (req, res) => {
   try {
@@ -83,6 +84,16 @@ const createOrder = async (req, res) => {
         order_id: newOrder.oid,
         customer_id: newOrder.customer_id,
         message: `New order created with status: ${status}`
+      }, { transaction: t });
+
+      // Fetch customer profile to get the name
+      const customerProfile = await CustomerProfile.findByPk(newOrder.customer_id, { transaction: t });
+      const customerName = customerProfile ? customerProfile.institution_name : 'Unknown Customer';
+
+      await Notification.create({
+        order_id: newOrder.oid,
+        admin_id: 1,
+        message: `New order created by ${customerName} with status: ${status}`
       }, { transaction: t });
 
       return newOrder;
@@ -248,15 +259,19 @@ const getOrderById = async (req, res) => {
 //   }
 // };
 
+
 const updateOrder = async (req, res) => {
   try {
     const { id } = req.params;
     const order = await Orders.findByPk(id);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+
     const originalStatus = order.status;
     const originalDriverId = order.driver_id;
+
     // Log the body
     console.log('Update Order Body:', req.body);
+
     // Update order fields
     await order.update({
       customer_id: req.body.customer_id ?? order.customer_id,
@@ -277,6 +292,7 @@ const updateOrder = async (req, res) => {
       delivery_contact_name: req.body.delivery_contact_name ?? order.delivery_contact_name,
       delivery_contact_phone: req.body.delivery_contact_phone ?? order.delivery_contact_phone
     });
+
     // Create notifications if status changed
     if (order.status !== originalStatus) {
       await Notification.create({
@@ -284,14 +300,15 @@ const updateOrder = async (req, res) => {
         customer_id: order.customer_id,
         message: `Order #${order.oid} status updated from ${originalStatus} to ${order.status}`
       });
-      if (order.driver_id) {
-        await Notification.create({
-          order_id: order.oid,
-          driver_id: order.driver_id,
-          message: `Order #${order.oid} status updated to ${order.status}`
-        });
-      }
+      // if (order.driver_id ) {
+      //   await Notification.create({
+      //     order_id: order.oid,
+      //     driver_id: order.driver_id,
+      //     message: `Order #${order.oid} status updated to ${order.status}`
+      //   });
+      // }
     }
+
     // Driver assignment notification
     if (req.body.driver_id && req.body.driver_id !== originalDriverId) {
       await Notification.create({
@@ -300,7 +317,8 @@ const updateOrder = async (req, res) => {
         message: `You have been assigned to deliver Order #${order.oid}`
       });
     }
-    // :white_tick: Reduce product stock if order is delivered
+
+    // Reduce product stock if order is delivered
     if (order.status === 'Delivered') {
       const orderItems = await OrderItems.findAll({
         where: { order_id: order.oid }
@@ -319,9 +337,9 @@ const updateOrder = async (req, res) => {
         }
       }
     }
-    // :white_tick: Mark related deliveries completed
+
+    // Mark related deliveries completed
     if (order.status === 'Delivered' && order.driver_id) {
-      const { Op } = require('sequelize');
       const deliveries = await Delivery.findAll({
         where: {
           driver_id: order.driver_id,
@@ -333,10 +351,46 @@ const updateOrder = async (req, res) => {
       }
       const driver = await DriversDetails.findByPk(order.driver_id);
       if (driver && driver.status !== 'Completed') {
-        driver.status = 'Completed';
+        driver.status = 'Available';
         await driver.save();
       }
     }
+
+    // Notification to admin when order is marked as Completed
+    if (order.status === 'Completed' && order.status !== originalStatus) {
+      // Fetch driver details
+      let driverName = '';
+      if (order.driver_id) {
+        const driver = await DriversDetails.findByPk(order.driver_id);
+        if (driver) {
+          driverName = `${driver.first_name} ${driver.last_name}`;
+        }
+      }
+      // Send notification to admin (admin_id: 1)
+      await Notification.create({
+        order_id: order.oid,
+        admin_id: 1,
+        message: `Order #${order.oid} has been marked as Completed by driver ${driverName}.`
+      });
+    }
+
+    // Notification to admin when order is Out for Delivery
+    if (order.status === 'Out for Delivery' && order.status !== originalStatus) {
+      // Fetch driver details
+      let driverName = '';
+      if (order.driver_id) {
+        const driver = await DriversDetails.findByPk(order.driver_id);
+        if (driver) {
+          driverName = `${driver.first_name} ${driver.last_name}`;
+        }
+      }
+      await Notification.create({
+        order_id: order.oid,
+        admin_id: 1,
+        message: `Order #${order.oid} has been approved and is now Out for Delivery. Driver: ${driverName}`
+      });
+    }
+
     res.status(200).json({
       message: 'Order updated successfully',
       data: order

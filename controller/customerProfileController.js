@@ -77,9 +77,8 @@ const getCustomerProfileById = async (req, res) => {
   try {
     const { id } = req.params;
     const profile = await CustomerProfile.findOne({
-      where:{
-        user_id:id
-      }
+      where: { user_id: id },
+      include: [{ model: User, attributes: ['profile_image'] }]
     });
     if (!profile) {
       return res.status(404).json({ message: 'Customer profile not found' });
@@ -131,12 +130,13 @@ const updateCustomerProfile = async (req, res) => {
 
       await profile.save({ transaction: t });
 
-      // Update associated user if email or password changed
-      if (contact_person_email !== undefined || password) {
+      // Update associated user if email or password changed, or if profile image uploaded
+      if (contact_person_email !== undefined || password || req.file) {
         const user = await User.findOne({ where: { uid: profile.user_id } });
         if (user) {
           if (contact_person_email !== undefined) user.email = contact_person_email;
           if (password) user.password = await bcrypt.hash(password, 10);
+          if (req.file) user.profile_image = req.file.filename;
           await user.save({ transaction: t });
         }
       }
