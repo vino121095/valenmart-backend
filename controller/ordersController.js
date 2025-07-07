@@ -83,7 +83,7 @@ const createOrder = async (req, res) => {
       await Notification.create({
         order_id: newOrder.oid,
         customer_id: newOrder.customer_id,
-        message: `New order created with status: ${status}`
+        message: `New order  #${newOrder.oid} created with status: ${status}`
       }, { transaction: t });
 
       // Fetch customer profile to get the name
