@@ -337,6 +337,35 @@ const updateProcurement = async (req, res) => {
       })
     }
 
+    if(status === 'Received'){
+      // Parse items (ensure it's an array)
+      let receivedItems = procurement.items;
+      try {
+        receivedItems = typeof receivedItems === 'string' ? JSON.parse(receivedItems) : receivedItems;
+      } catch (e) {
+        receivedItems = [];
+      }
+
+      // For each item, update the product's unit/stock
+      for (const item of receivedItems) {
+        // item.product_id or item.productId (depends on your items structure)
+        // item.unit or item.quantity (depends on your items structure)
+        const productId = item.product_id || item.productId;
+        const receivedUnit = parseFloat(item.unit || item.quantity || 0);
+
+        if (productId && receivedUnit > 0) {
+          // Find the product
+          const product = await Products.findByPk(productId);
+          if (product) {
+            // Increase the unit/stock
+            await product.update({
+              unit: parseFloat(product.unit) + receivedUnit
+            });
+          }
+        }
+      }
+    }
+
     // Now update the procurement
     await procurement.update({
       order_date: order_date || procurement.order_date,
