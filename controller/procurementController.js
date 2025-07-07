@@ -140,7 +140,7 @@ const getAllProcurement = async (req, res) => {
       include: [{
         model: Vendor,
         as: 'vendor',
-        attributes: ['vendor_id', 'contact_person'] // or any other fields you need
+        attributes: ['vendor_id', 'contact_person', 'address', 'phone', 'city', 'state', 'pincode'] // or any other fields you need
       },
       {
         model: DriversDetails,
