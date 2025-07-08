@@ -10,5 +10,6 @@ router.get('/delivery/get-delivery/:id', deliveryController.getDeliveryByOrderId
 router.put('/delivery/update/:id', uploadDeliveryStatusImage, deliveryController.updateDelivery);
 router.delete('/delivery/delete/:id', deliveryController.deleteDelivery);
 router.put('/delivery/mark-delivered/:id', uploadDeliveryStatusImage, deliveryController.markAsDeliveredWithImage);
+router.post('/deliveries/mark-paid', deliveryController.markDeliveriesAsPaid);
 
 module.exports = router;
