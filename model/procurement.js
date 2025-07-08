@@ -25,7 +25,7 @@ const Procurement = db.define('Procurement', {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
-      isIn: [['vendor', 'admin']]
+      isIn: [['vendor', 'admin', 'farmer']]
     }
   },
   vendor_id: {

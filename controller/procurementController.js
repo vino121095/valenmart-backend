@@ -76,6 +76,17 @@ const createProcurement = async (req, res) => {
     } else if (type === 'vendor') {
       vendor_id = bodyVendorId;
     }
+    else if(type === 'farmer'){
+      vendor_id = bodyVendorId;
+    }
+
+    // ✅ Ensure vendor_id exists in vendor table
+    if (vendor_id) {
+      const vendorExists = await Vendor.findByPk(vendor_id);
+      if (!vendorExists) {
+        return res.status(404).json({ message: `Vendor not found with id: ${vendor_id}` });
+      }
+    }
 
     // ✅ Create procurement entry
     const newProcurement = await Procurement.create({
