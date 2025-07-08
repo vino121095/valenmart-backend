@@ -1,7 +1,7 @@
 // const Delivery = require('../model/delivery');
 const { where } = require('sequelize');
 const { DriversDetails, Delivery, Orders, Procurement } = require('../model/index');
-const Notification = require('../model/notification.js');
+
 // Helper to generate unique delivery number
 async function generateUniqueDeliveryNumber(driver_id) {
   let count = await Delivery.count({ where: { driver_id } });
@@ -36,7 +36,11 @@ function formatDelivery(delivery) {
       : null,
     status: delivery.status,
     type: delivery.type,
-    charges: delivery.status === 'Completed' || delivery.status === 'Delivered' ? delivery.charges : null,
+    charges: delivery.charges,
+    // charges: delivery.status === 'Completed' || delivery.status === 'Delivered' ? delivery.charges : null,
+    payment_status: delivery.payment_status,
+    createdAt: delivery.createdAt,
+    updatedAt: delivery.updatedAt
   };
 
   // Add deliveryNo only if status is Completed
@@ -78,8 +82,16 @@ exports.createDelivery = async (req, res) => {
 exports.updateDelivery = async (req, res) => {
   try {
     const { id } = req.params;
-    const { driver_id, date, timeSlot, status, type } = req.body;
-    const delivery_image = req.file; // multer handles this
+    const {
+      driver_id,
+      date,
+      timeSlot,
+      status,
+      type,
+      charges // incoming new charges
+    } = req.body;
+
+    const delivery_image = req.file; // handled by multer
 
     const delivery = await Delivery.findByPk(id);
 
@@ -87,14 +99,12 @@ exports.updateDelivery = async (req, res) => {
       return res.status(404).json({ message: 'Delivery not found' });
     }
 
-    // Validation: can't mark Delivered without an image
+    // === Validation ===
     if (status === 'Delivered' && !delivery_image && !delivery.delivery_image) {
       return res.status(400).json({ message: 'Cannot mark as Delivered without delivery image' });
     }
 
-    // Prepare fields to update
     const updateFields = {
-      delivery_image,
       driver_id,
       date,
       timeSlot,
@@ -102,42 +112,70 @@ exports.updateDelivery = async (req, res) => {
       type
     };
 
-    // If image is uploaded, update delivery_image and force status to Delivered
+    // === Handle Image Upload ===
     if (delivery_image) {
       updateFields.delivery_image = delivery_image.filename;
       updateFields.status = 'Delivered';
     }
 
-    // Perform the update
-    await delivery.update(updateFields);
+    // === Handle Charges (only if payment_status is still "Receive") ===
+    if (charges && delivery.payment_status === 'Receive') {
+      // Only add new charges if payment not yet received
+      updateFields.charges = parseFloat(delivery.charges) + parseFloat(charges);
+    }
 
-    // Send notification to admin if delivered
-    if (updateFields.status === 'Delivered') {
-      // Find the related order (assuming delivery has order_id)
-      let order = null;
-      if (delivery.order_id) {
-        order = await Orders.findByPk(delivery.order_id);
-      }
-      let driverName = '';
-      if (delivery.driver_id) {
-        const driver = await DriversDetails.findByPk(delivery.driver_id);
-        if (driver) {
-          driverName = `${driver.first_name} ${driver.last_name}`;
-        }
-      }
-      await Notification.create({
-        order_id: order ? order.oid : delivery.order_id,
-        admin_id: 1,
-        message: `Order #${order ? order.oid : delivery.order_id} has been marked as Completed by driver ${driverName}. Status: Completed.`
+    // Prevent modification of charges after payment_status is "Received"
+    if (delivery.payment_status === 'Received' && charges) {
+      return res.status(400).json({
+        message: 'Payment has already been received. No new charges can be added.'
       });
     }
 
-    res.status(200).json({ message: 'Delivery updated', delivery: formatDelivery(delivery) });
+    // === Prevent manual override of payment_status here ===
+    // Payment status should only be updated in a separate bulk payment logic.
+    // If you want to allow updating payment_status here, uncomment this block:
+    /*
+    if (req.body.payment_status && ['Receive', 'Received'].includes(req.body.payment_status)) {
+      updateFields.payment_status = req.body.payment_status;
+    }
+    */
+
+    await delivery.update(updateFields);
+
+    res.status(200).json({
+      message: 'Delivery updated successfully',
+      delivery: formatDelivery(delivery)
+    });
+
   } catch (error) {
-    console.error('Update error:', error);
+    console.error('Update Delivery Error:', error);
     res.status(500).json({ message: 'Error updating delivery', error });
   }
 };
+
+// POST /api/deliveries/mark-paid
+exports.markDeliveriesAsPaid = async (req, res) => {
+  try {
+    const { deliveryIds = [] } = req.body;
+
+    const [updatedCount] = await Delivery.update(
+      { payment_status: 'Received' },
+      {
+        where: {
+          id: deliveryIds,
+          payment_status: 'Receive'
+        }
+      }
+    );
+
+    res.status(200).json({ message: `${updatedCount} deliveries marked as paid.` });
+
+  } catch (error) {
+    console.error('Bulk payment status update failed:', error);
+    res.status(500).json({ message: 'Error marking deliveries as paid', error });
+  }
+};
+
 
 // Get delivery by ID
 exports.getDeliveryById = async (req, res) => {
@@ -297,29 +335,10 @@ exports.markAsDeliveredWithImage = async (req, res) => {
       );
     }
 
-    const driver = await DriversDetails.findByPk(delivery.driver_id);
-    const driverName = `${driver.first_name} ${driver.last_name}`;
-
     await delivery.update({
       status: 'Delivered',
       delivery_image
     });
-    
-    if(delivery.order_id){
-      await Notification.create({
-        order_id: delivery.order_id,
-        admin_id: 1,
-        message: `Order #${delivery.order_id} has been marked as Completed by driver ${driverName}. Status: Completed.`
-      });
-    }
-    else if(delivery.procurement_id){
-      await Notification.create({
-        order_id: null,
-        admin_id: 1,
-        message: `Procurement #${delivery.procurement_id} has been marked as Completed by driver ${driverName}. Status: Completed.`
-      });
-    }
-
 
     return res.status(200).json({ message: 'Delivery marked as Delivered', delivery: formatDelivery(delivery) });
   } catch (error) {
