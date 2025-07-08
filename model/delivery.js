@@ -5,7 +5,7 @@ const Orders = require('./orders');
 const Procurement = require('./procurement');
 
 const Delivery = sequelize.define('Delivery', {
-  id:{
+  id: {
     type: DataTypes.INTEGER,
     primaryKey: true,
     autoIncrement: true
@@ -33,7 +33,7 @@ const Delivery = sequelize.define('Delivery', {
     },
     onDelete: 'CASCADE'
   },
-  
+
   driver_id: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -69,6 +69,11 @@ const Delivery = sequelize.define('Delivery', {
     type: DataTypes.FLOAT,  // or INTEGER if you only use whole numbers
     allowNull: false,
     defaultValue: 0
+  },
+  payment_status: {
+    type: DataTypes.ENUM('Receive', 'Received'),
+    allowNull: false,
+    defaultValue: 'Receive'
   }
 
 }, {
