@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:3001'], // allow both origins
+  origin: ['https://velaanadmin.boonnet.co', 'https://velaanbackend.boonnet.co'], // allow both origins
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   credentials: true,
 };
@@ -122,7 +122,7 @@ app.use('/api', deliveryRoutes);
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api', notificationRoutes);
 // Listen on the port from the .env file
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
