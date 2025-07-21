@@ -34,7 +34,7 @@ exports.createCartItem = async (req, res) => {
 
     if (existingCartItem) {
       // Update existing cart item
-      existingCartItem.quantity += quantity;
+      existingCartItem.quantity = quantity;
       existingCartItem.price_at_time = product.price * existingCartItem.quantity;
       await existingCartItem.save();
       return res.json(existingCartItem);
