@@ -35,13 +35,13 @@ exports.createCartItem = async (req, res) => {
     if (existingCartItem) {
       // Update existing cart item
       existingCartItem.quantity = quantity;
-      existingCartItem.price_at_time = product.price * existingCartItem.quantity;
+      existingCartItem.price_at_time = product.price;
       await existingCartItem.save();
       return res.json(existingCartItem);
     }
 
     // Create new cart item if it doesn't exist
-    const price_at_time = product.price * quantity;
+    const price_at_time = product.price ;
     const cartItem = await Cart.create({
       customer_id: customer.user_id,
       product_id,
