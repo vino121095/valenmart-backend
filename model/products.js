@@ -32,7 +32,7 @@ const Products = db.define('Products', {
     type: DataTypes.STRING,
     allowNull: false,
     validate: {
-      isIn: [['summer', 'winter', 'spring', 'autumn', 'all-season']]
+      isIn: [['summer', 'winter', 'spring', 'autumn', 'All Season']]
     }
   },
   season_start: {
