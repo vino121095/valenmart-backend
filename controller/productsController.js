@@ -8,9 +8,9 @@ const createProduct = async (req, res) => {
             discription,
             category,
             unit,
-            is_seasonal,
-            season_start,
-            season_end,
+            is_seasonal,      // optional
+            season_start,     // optional
+            season_end,       // optional
             is_active,
             price,
             cgst,
@@ -19,37 +19,40 @@ const createProduct = async (req, res) => {
         } = req.body;
 
         let product_image = null;
-
         if (req.file) {
             product_image = req.file.path;
         }
 
-        const newProducts = await Products.create({
+        // Fallback defaults
+        const seasonalValue = is_seasonal || 'All Season';
+        const seasonStartValue = is_seasonal ? season_start || null : null;
+        const seasonEndValue = is_seasonal ? season_end || null : null;
+
+        const newProduct = await Products.create({
             product_name,
             discription,
             category,
             unit,
-            is_seasonal,
-            season_start,
-            season_end,
+            is_seasonal: seasonalValue,
+            season_start: seasonStartValue,
+            season_end: seasonEndValue,
             is_active,
             product_image,
             price,
-            cgst,
-            sgst,
-            delivery_fee
+            cgst: cgst !== undefined ? cgst : 0,
+            sgst: sgst !== undefined ? sgst : 0,
+            delivery_fee: delivery_fee !== undefined ? delivery_fee : 0
         });
 
         res.status(201).json({
-            message: 'Products added successfully',
-            data: newProducts
+            message: 'Product added successfully',
+            data: newProduct
         });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: error.message });
     }
 };
-
 const getAllProducts = async (req, res) => {
     try {
         const products = await Products.findAll();
